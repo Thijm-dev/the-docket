@@ -155,6 +155,41 @@ body{
 }
 .tab[data-pool="unfiltered"][aria-selected="true"]{color:var(--v-esh)}
 
+/* ---------- first visit ---------- */
+.intro[hidden]{display:none!important}
+.intro{
+  margin-top:26px;background:var(--card);border:1px solid var(--rule-soft);
+  border-radius:2px;padding:30px 30px 26px;box-shadow:var(--shadow);
+}
+.intro h2{
+  font-family:"Zilla Slab",Rockwell,Georgia,serif;
+  font-size:30px;font-weight:700;letter-spacing:-.015em;line-height:1.15;
+  margin:0 0 14px;text-wrap:balance;
+}
+.intro p{margin:0 0 14px;font-size:17px;line-height:1.55;max-width:56ch;color:var(--ink-2)}
+.intro p.quiet{color:var(--ink-3);font-size:15.5px}
+.verdicts{
+  list-style:none;margin:20px 0;padding:18px 0;
+  border-top:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft);
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 22px;
+}
+.verdicts li{display:flex;align-items:center;gap:11px;min-width:0}
+.verdicts b{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:13px;font-weight:600;letter-spacing:.05em;flex:none;
+  border:1.5px solid currentColor;border-radius:2px;padding:5px 8px 4px;
+}
+.verdicts b[data-v="YTA"]{color:var(--v-yta)}
+.verdicts b[data-v="NTA"]{color:var(--v-nta)}
+.verdicts b[data-v="ESH"]{color:var(--v-esh)}
+.verdicts b[data-v="NAH"]{color:var(--v-nah)}
+.verdicts span{font-size:15.5px;color:var(--ink-2);min-width:0}
+@media (max-width:460px){
+  .intro{padding:22px 18px 20px}
+  .intro h2{font-size:25px}
+  .verdicts{grid-template-columns:1fr}
+}
+
 /* ---------- content gate ---------- */
 .gate{
   margin-top:24px;background:var(--card);border:1px solid var(--rule-soft);
@@ -433,6 +468,26 @@ body{
     <span id="notice-text"></span>
   </div>
 
+  <section class="intro" id="intro" hidden>
+    <h2>Welcome to the Docket</h2>
+    <p>In this game you judge real stories from real people, posted on
+      r/AmItheAsshole. The comments and the verdict are hidden — read the
+      case and hand down a ruling.</p>
+
+    <ul class="verdicts">
+      <li><b data-v="YTA">YTA</b> <span>You're the asshole</span></li>
+      <li><b data-v="NTA">NTA</b> <span>Not the asshole</span></li>
+      <li><b data-v="ESH">ESH</b> <span>Everyone sucks here</span></li>
+      <li><b data-v="NAH">NAH</b> <span>No assholes here</span></li>
+    </ul>
+
+    <p>Then you'll see how the thread ruled.</p>
+
+    <div class="acts">
+      <button class="btn primary" id="intro-go" type="button">Start judging</button>
+    </div>
+  </section>
+
   <section class="gate done" id="done" hidden>
     <h2>You've cleared the docket</h2>
     <p id="done-text"></p>
@@ -593,7 +648,7 @@ function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){}
 }
 
-let store = Object.assign({pool:"everyday", warned:false, stats:{}}, load());
+let store = Object.assign({pool:"everyday", warned:false, welcomed:false, stats:{}}, load());
 store.stats = store.stats || {};
 ["everyday","unfiltered"].forEach(p => {
   store.stats[p] = Object.assign(blank(), store.stats[p] || {});
@@ -637,6 +692,8 @@ function renderTabs(){
 
 function renderCase(){
   answered = false;
+  $("intro").hidden = true;
+  setChrome(true);
   $("gate").hidden = true;
   $("done").hidden = true;
   $("stats").hidden = true;
@@ -658,7 +715,28 @@ function renderCase(){
 }
 
 function showGate(){
+  $("intro").hidden = true;
+  setChrome(true);
   $("gate").hidden = false;
+  $("done").hidden = true;
+  $("stats").hidden = true;
+  $("case").hidden = true;
+  $("ruling").hidden = true;
+  $("bar").hidden = true;
+  window.scrollTo({top:0, behavior:"instant"});
+}
+
+// The tabs and the source note are noise on a first visit — the welcome
+// screen is the whole page until someone starts.
+function setChrome(on){
+  $("tabs").hidden = !on;
+  $("notice").hidden = !on;
+}
+
+function showIntro(){
+  $("intro").hidden = false;
+  setChrome(false);
+  $("gate").hidden = true;
   $("done").hidden = true;
   $("stats").hidden = true;
   $("case").hidden = true;
@@ -707,6 +785,8 @@ function showDone(){
   acts.appendChild(again);
 
   $("done").hidden = false;
+  $("intro").hidden = true;
+  setChrome(true);
   $("gate").hidden = true;
   $("stats").hidden = true;
   $("case").hidden = true;
@@ -892,6 +972,8 @@ function renderStats(){
 
 function showStats(){
   renderStats();
+  $("intro").hidden = true;
+  setChrome(true);
   $("stats").hidden = false;
   $("done").hidden = true;
   $("case").hidden = true;
@@ -942,10 +1024,16 @@ $("gate-ok").addEventListener("click", () => {
   serveNext();
 });
 $("gate-back").addEventListener("click", () => setPool("everyday"));
+$("intro-go").addEventListener("click", () => {
+  store.welcomed = true;
+  save();
+  serveNext();
+});
 
 document.addEventListener("keydown", e => {
   if(answered || e.metaKey || e.ctrlKey) return;
   if(!$("gate").hidden || !$("stats").hidden || !$("done").hidden) return;
+  if(!$("intro").hidden) return;
   const k = {y:"YTA", n:"NTA", e:"ESH", a:"NAH"}[e.key.toLowerCase()];
   if(k) judge(k);
 });
@@ -984,6 +1072,10 @@ function start(carried){
     pool = store.pool = carried.pool;
   }
   renderTabs();
+  if(!store.welcomed){
+    showIntro();
+    return;
+  }
   if(pool === "unfiltered" && !store.warned){
     showGate();
     return;
